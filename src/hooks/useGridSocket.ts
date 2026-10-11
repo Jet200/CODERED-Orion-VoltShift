@@ -250,6 +250,13 @@ export function useGridSocket() {
     sendAction({ action: 'RESET_METRICS' });
   }, [sendAction]);
 
+  const overrideWorkload = useCallback(
+    (workloadId: string, status: import('../types').ActionStatus | 'AUTO') => {
+      sendAction({ action: 'OVERRIDE_WORKLOAD', workload_id: workloadId, status });
+    },
+    [sendAction]
+  );
+
   useEffect(() => {
     let unmounted = false;
 
@@ -327,5 +334,6 @@ export function useGridSocket() {
     triggerPeakerSpike,
     toggleTicker,
     resetMetrics,
+    overrideWorkload,
   };
 }

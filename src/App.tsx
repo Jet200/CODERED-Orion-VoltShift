@@ -36,6 +36,7 @@ export default function App() {
     toggleAutonomousMode,
     triggerPeakerSpike,
     resetMetrics,
+    overrideWorkload,
   } = useGridSocket();
 
   const [activeTab, setActiveTab] = useState<TabPage>('HOME');
@@ -206,6 +207,7 @@ export default function App() {
               handleSelectSiteAndInspect(id);
               setActiveTab('MAP');
             }}
+            onOverrideWorkload={overrideWorkload}
           />
         )}
 

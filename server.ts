@@ -330,6 +330,7 @@ const simState = {
   cumulativeMwhShifted: 19.4,
   cumulativeCostSavedUsd: 2980.0,
   workloadProgress: {} as Record<string, number>,
+  workloadOverrides: {} as Record<string, 'BOOST' | 'MAINTAIN' | 'THROTTLE' | 'DEFER'>,
 };
 
 // Initialize progress
@@ -415,8 +416,21 @@ function dispatchWorkloads(zones: ReturnType<typeof getGridZones>, hour: number,
 
     let targetKw = item.baseline_kw;
     let status: 'BOOST' | 'MAINTAIN' | 'THROTTLE' | 'DEFER' = 'MAINTAIN';
+    const overrideStatus = simState.workloadOverrides[item.id];
 
-    if (autonomous) {
+    if (overrideStatus) {
+      status = overrideStatus;
+      if (status === 'BOOST') {
+        targetKw = item.max_kw;
+        stepCleanShiftedKwh += Math.max(0, targetKw - item.baseline_kw);
+      } else if (status === 'THROTTLE') {
+        targetKw = Math.round(item.baseline_kw * (1.0 - item.flexibility_score * 0.6));
+      } else if (status === 'DEFER') {
+        targetKw = Math.round(item.baseline_kw * 0.15);
+      } else {
+        targetKw = item.baseline_kw;
+      }
+    } else if (autonomous) {
       if (slaCritical) {
         targetKw = item.max_kw;
         status = 'BOOST';
@@ -473,6 +487,7 @@ function dispatchWorkloads(zones: ReturnType<typeof getGridZones>, hour: number,
       status,
       delta_kw: deltaKw,
       sla_progress_pct: simState.workloadProgress[item.id],
+      override_status: overrideStatus || null,
     };
   });
 
@@ -1076,17 +1091,24 @@ app.get(['/api/tutorial.pdf', '/api/download-tutorial'], async (req, res) => {
 });
 
 app.post('/api/action', async (req, res) => {
-  const { action, hour, autonomous_mode, peaker_active } = req.body;
+  const { action, hour, autonomous_mode, peaker_active, workload_id, status } = req.body;
   if (action === 'SET_HOUR' && typeof hour === 'number') {
     simState.simHour = Math.max(0, Math.min(23, hour));
   } else if (action === 'TOGGLE_MODE') {
     simState.isAutonomousMode = autonomous_mode !== undefined ? Boolean(autonomous_mode) : !simState.isAutonomousMode;
   } else if (action === 'TRIGGER_PEAKER_SPIKE') {
     simState.isPeakerEvent = peaker_active !== undefined ? Boolean(peaker_active) : !simState.isPeakerEvent;
+  } else if (action === 'OVERRIDE_WORKLOAD' && workload_id) {
+    if (status === 'AUTO' || !status) {
+      delete simState.workloadOverrides[workload_id];
+    } else if (['BOOST', 'MAINTAIN', 'THROTTLE', 'DEFER'].includes(status)) {
+      simState.workloadOverrides[workload_id] = status;
+    }
   } else if (action === 'RESET_METRICS') {
     simState.cumulativeCo2AvoidedKg = 0;
     simState.cumulativeMwhShifted = 0;
     simState.cumulativeCostSavedUsd = 0;
+    simState.workloadOverrides = {};
     for (const w of WORKLOAD_CONFIGS) {
       simState.workloadProgress[w.id] = 10.0;
     }
@@ -1134,6 +1156,12 @@ wss.on('connection', async (ws) => {
       } else if (data.action === 'TRIGGER_PEAKER_SPIKE') {
         simState.isPeakerEvent =
           data.peaker_active !== undefined ? Boolean(data.peaker_active) : !simState.isPeakerEvent;
+      } else if (data.action === 'OVERRIDE_WORKLOAD' && data.workload_id) {
+        if (data.status === 'AUTO' || !data.status) {
+          delete simState.workloadOverrides[data.workload_id];
+        } else if (['BOOST', 'MAINTAIN', 'THROTTLE', 'DEFER'].includes(data.status)) {
+          simState.workloadOverrides[data.workload_id] = data.status;
+        }
       } else if (data.action === 'TOGGLE_TICKER') {
         simState.isTickerRunning = !simState.isTickerRunning;
       }

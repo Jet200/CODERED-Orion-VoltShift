@@ -63,6 +63,7 @@ export interface IndustrialWorkload {
   coordinates: [number, number]; // [lat, lng]
   sla_progress_pct: number;
   delta_kw: number;
+  override_status?: ActionStatus | null;
 }
 
 export interface HourlyForecastPoint {
@@ -109,4 +110,5 @@ export type ClientAction =
   | { action: 'TOGGLE_MODE'; autonomous_mode?: boolean }
   | { action: 'TRIGGER_PEAKER_SPIKE'; peaker_active?: boolean }
   | { action: 'TOGGLE_TICKER' }
-  | { action: 'RESET_METRICS' };
+  | { action: 'RESET_METRICS' }
+  | { action: 'OVERRIDE_WORKLOAD'; workload_id: string; status: ActionStatus | 'AUTO' };

@@ -956,7 +956,7 @@ You can download the full executive PDF tutorial directly by clicking **Tutorial
 5. **Ask Gemini in Real-Time**: Use this chat panel to ask questions about dispatch strategies, carbon arbitrage, or SLA guarantees.`;
   }
 
-  return `> Live Gemini responses are unavailable right now, so this is the built-in summary rather than an answer to your exact question.
+  return `**Note:** Live Gemini responses are unavailable right now, so this is the built-in summary rather than an answer to your exact question.
 
 ### Gemini Dispatch Decision Engine (Hour ${simHour}:00)
 
@@ -1074,8 +1074,9 @@ INSTRUCTIONS:
           isPeaker,
         });
       }
+      console.warn(`[Gemini Chat API] Empty response from ${GEMINI_MODEL}; using deterministic energy advisor.`);
     } catch (err: any) {
-      console.warn('[Gemini Chat API] Rate limit or error; using deterministic energy advisor:', err?.message || err);
+      console.warn(`[Gemini Chat API] Rate limit or error (model=${GEMINI_MODEL}, status=${err?.status ?? 'unknown'}); using deterministic energy advisor:`, err?.message || err);
     }
   } else {
     console.warn('[Gemini Chat API] GEMINI_API_KEY is not set; using deterministic energy advisor.');

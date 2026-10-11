@@ -2,6 +2,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
@@ -16,6 +17,27 @@ const isProd = process.env.NODE_ENV === 'production';
 
 const app = express();
 app.use(express.json());
+
+// CORS: allow the separately hosted frontend (e.g. Vercel) to call this API.
+// CORS_ORIGIN is a comma-separated list of allowed origins; unset or "*" allows all.
+const allowedOrigins = (process.env.CORS_ORIGIN || '*')
+  .split(',')
+  .map((o) => o.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes('*')) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  } else if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
 
 // Initialize Google GenAI
 const ai = process.env.GEMINI_API_KEY
@@ -1200,14 +1222,18 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
+    // Serve the built frontend if present; otherwise run API-only (e.g. on Render,
+    // with the frontend hosted separately on Vercel).
     const distPath = path.resolve(__dirname, 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.resolve(distPath, 'index.html'));
-    });
+    if (fs.existsSync(path.join(distPath, 'index.html'))) {
+      app.use(express.static(distPath));
+      app.get('*', (req, res) => {
+        res.sendFile(path.resolve(distPath, 'index.html'));
+      });
+    }
   }
 
-  server.listen(PORT, () => {
+  server.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`[VoltShift Server] Running at http://localhost:${PORT}`);
   });
 }

@@ -1,3 +1,4 @@
+import { apiUrl } from '../lib/api';
 import React, { useState, useRef, useEffect } from 'react';
 import {
   BrainCircuit,
@@ -112,7 +113,7 @@ Ask me anything about how energy shifts across time, how peaker spikes are mitig
     setIsLoading(true);
 
     try {
-      const resp = await fetch('/api/gemini/chat', {
+      const resp = await fetch(apiUrl('/api/gemini/chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

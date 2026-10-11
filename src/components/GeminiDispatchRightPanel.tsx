@@ -1,3 +1,4 @@
+import { apiUrl } from '../lib/api';
 import React, { useState, useRef, useEffect } from 'react';
 import {
   BrainCircuit,
@@ -128,7 +129,7 @@ Ask me any question about how power is shifted, how tariffs are minimized, or ho
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/gemini/chat', {
+      const response = await fetch(apiUrl('/api/gemini/chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

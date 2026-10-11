@@ -52,7 +52,7 @@ const ai = process.env.GEMINI_API_KEY
   : null;
 
 // Gemini model ID; override with GEMINI_MODEL if a newer model is available to your key.
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
 
 // Electricity Maps API Configuration
 const ELECTRICITY_MAPS_KEY = process.env.ELECTRICITY_MAPS_KEY || '';

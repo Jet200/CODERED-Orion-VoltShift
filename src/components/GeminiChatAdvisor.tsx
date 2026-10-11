@@ -118,6 +118,7 @@ Ask me anything about how energy shifts across time, how peaker spikes are mitig
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: question,
+          history: messages.slice(-8).map((m) => ({ role: m.role, content: m.content })),
           simHour,
           isAutonomous,
           isPeaker,

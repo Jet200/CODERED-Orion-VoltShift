@@ -134,6 +134,7 @@ Ask me any question about how power is shifted, how tariffs are minimized, or ho
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: question,
+          history: messages.slice(-8).map((m) => ({ role: m.role, content: m.content })),
           simHour,
           isAutonomous,
           isPeaker,

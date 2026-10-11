@@ -51,6 +51,9 @@ const ai = process.env.GEMINI_API_KEY
     })
   : null;
 
+// Gemini model ID; override with GEMINI_MODEL if a newer model is available to your key.
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+
 // Electricity Maps API Configuration
 const ELECTRICITY_MAPS_KEY = process.env.ELECTRICITY_MAPS_KEY || '';
 
@@ -633,9 +636,9 @@ async function getAiExplanation(
   const isCooldownActive = now < rateLimitCooldownUntil;
   const isRateLimited = now - lastGeminiCallTimestamp < MIN_GEMINI_INTERVAL_MS;
 
-  // If in cooldown or called too recently, store heuristic in cache and return
+  // If in cooldown or called too recently, return the heuristic without caching it
+  // so a live Gemini explanation is attempted again on a later tick.
   if (!ai || isCooldownActive || isRateLimited) {
-    explanationCache.set(cacheKey, fallbackExplanation);
     return fallbackExplanation;
   }
 
@@ -665,7 +668,7 @@ Respond in valid JSON with (STRICT RULE: Do not include emojis in any text field
 }`;
 
       const res = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: GEMINI_MODEL,
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
@@ -694,7 +697,6 @@ Respond in valid JSON with (STRICT RULE: Do not include emojis in any text field
       } else {
         console.warn('[Gemini AI] Non-quota error, using heuristic advisor:', err?.message || err);
       }
-      explanationCache.set(cacheKey, fallbackExplanation);
       return fallbackExplanation;
     } finally {
       inFlightAiPromise = null;
@@ -954,7 +956,9 @@ You can download the full executive PDF tutorial directly by clicking **Tutorial
 5. **Ask Gemini in Real-Time**: Use this chat panel to ask questions about dispatch strategies, carbon arbitrage, or SLA guarantees.`;
   }
 
-  return `### Gemini Dispatch Decision Engine (Hour ${simHour}:00)
+  return `> Live Gemini responses are unavailable right now, so this is the built-in summary rather than an answer to your exact question.
+
+### Gemini Dispatch Decision Engine (Hour ${simHour}:00)
 
 - **Current Catalyst**: ${explanation?.primary_driver || 'Diurnal Multi-ISO Optimization'}
 - **Autonomous Mode**: ${isAutonomous ? 'Active' : 'Unmanaged'}
@@ -972,7 +976,9 @@ You can ask me anything about:
 }
 
 app.post('/api/gemini/chat', async (req, res) => {
-  const { message, history, context } = req.body;
+  const { message, history } = req.body;
+  // The frontend sends simulation context as top-level fields; older clients nest it under `context`.
+  const context = req.body.context ?? req.body;
   if (!message || typeof message !== 'string') {
     return res.status(400).json({ error: 'Message is required' });
   }
@@ -981,8 +987,9 @@ app.post('/api/gemini/chat', async (req, res) => {
   const simHour = context?.simHour ?? currentTelemetry.sim_hour;
   const isPeaker = context?.isPeaker ?? currentTelemetry.is_peaker_event;
   const isAutonomous = context?.isAutonomous ?? currentTelemetry.is_autonomous_mode;
-  const zones = context?.zones ?? currentTelemetry.zones;
-  const workloads = context?.workloads ?? currentTelemetry.workloads;
+  // Zones/workloads come from server telemetry, which has the full field set the prompt needs.
+  const zones = currentTelemetry.zones;
+  const workloads = currentTelemetry.workloads;
   const explanation = context?.explanation ?? currentTelemetry.ai_explanation;
 
   const zoneSummary = zones.map((z: any) => {
@@ -1034,12 +1041,14 @@ INSTRUCTIONS:
     try {
       const contents: any[] = [];
       if (Array.isArray(history) && history.length > 0) {
-        const recentHistory = history.slice(-6);
+        const recentHistory = history.slice(-8);
         for (const msg of recentHistory) {
-          contents.push({
-            role: msg.role === 'model' ? 'model' : 'user',
-            parts: [{ text: String(msg.parts || msg.content || '') }],
-          });
+          const text = String(msg?.content ?? msg?.parts ?? '').trim();
+          if (!text) continue;
+          const role = msg.role === 'model' ? 'model' : 'user';
+          // Gemini requires the conversation to start with a user turn
+          if (contents.length === 0 && role === 'model') continue;
+          contents.push({ role, parts: [{ text }] });
         }
       }
       contents.push({
@@ -1048,7 +1057,7 @@ INSTRUCTIONS:
       });
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: GEMINI_MODEL,
         contents,
         config: {
           systemInstruction,
@@ -1059,7 +1068,7 @@ INSTRUCTIONS:
       if (response.text) {
         return res.json({
           reply: response.text.trim(),
-          source: 'gemini-3.8-flash',
+          source: GEMINI_MODEL,
           simHour,
           isAutonomous,
           isPeaker,
@@ -1068,6 +1077,8 @@ INSTRUCTIONS:
     } catch (err: any) {
       console.warn('[Gemini Chat API] Rate limit or error; using deterministic energy advisor:', err?.message || err);
     }
+  } else {
+    console.warn('[Gemini Chat API] GEMINI_API_KEY is not set; using deterministic energy advisor.');
   }
 
   const fallbackReply = generateHeuristicChatReply(message, {
